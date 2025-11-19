@@ -79,7 +79,7 @@ function Get-KeyVaultCertificate {
         return $cert
     }
     catch {
-        throw "Failed to retrieve certificate from Key Vault: $($_.Exception.Message)"
+        throw "Failed to retrieve certificate '$($CertificateName)' from Key Vault '$($VaultName)': $($_.Exception.Message)"
     }
 }
 
