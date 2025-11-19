@@ -12,7 +12,7 @@ This Azure Function App provides identity verification using Microsoft Authentic
 
 ## Deployment Option 1: Deploy directly to Azure using ARM Template
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcscaminaci%2FSMS-Identity-Verification-for-HaloPSA%2Frefs%2Fheads%2Fmain%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Frobinvp90%2Fsmsverification%2Fmain%2Fazuredeploy.json)
 
 ## Deployment Option 2: Deploy Manually with ARM Template
 
