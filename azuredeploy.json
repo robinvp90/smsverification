@@ -4,7 +4,7 @@
     "parameters": {
         "functionAppName": {
             "type": "string",
-            "defaultValue": "MSPAutomator-SMSIdentityVerification",
+            "defaultValue": "MSPAutomator-AuthenticatorVerification",
             "metadata": {
                 "description": "The name of the Azure Function app that you wish to create."
             }
@@ -41,7 +41,7 @@
                 "description": "Your MSP company name"
             }
         },
-        "location": {
+		"location": {
             "type": "string",
             "defaultValue": "East US",
             "metadata": {
@@ -137,6 +137,10 @@
                             "value": "[variables('functionRuntime')]"
                         },
                         {
+                            "name": "KEY_VAULT_NAME",
+                            "value": "[parameters('keyVaultName')]"
+                        },
+                        {
                             "name": "HALO_WEBHOOK_URL",
                             "value": "[parameters('haloWebhookUrl')]"
                         },
@@ -154,33 +158,6 @@
                         }
                     ]
                 }
-            }
-        },
-        {
-            "type": "Microsoft.KeyVault/vaults/accessPolicies",
-            "apiVersion": "2021-10-01",
-            "name": "[concat(parameters('keyVaultName'), '/add')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
-                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
-            ],
-            "properties": {
-                "accessPolicies": [
-                    {
-                        "tenantId": "[subscription().tenantId]",
-                        "objectId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'Full').identity.principalId]",
-                        "permissions": {
-                            "secrets": [
-                                "get",
-                                "list"
-                            ],
-                            "certificates": [
-                                "get",
-                                "list"
-                            ]
-                        }
-                    }
-                ]
             }
         }
     ],

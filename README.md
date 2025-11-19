@@ -1,22 +1,16 @@
-# SMS Identity Verification Function App
+# Microsoft Authenticator Identity Verification Function App
 
-This Azure Function App provides SMS-based identity verification for HaloPSA using Twilio for sending verification codes and integrates with Microsoft Graph API for user authentication method retrieval.
+This Azure Function App provides identity verification using Microsoft Authenticator for HaloPSA. It integrates with Microsoft Graph API for user authentication method retrieval.
 
 ## Prerequisites
 
 1. An Azure subscription
-2. A Twilio account with:
-   - Account SID
-   - Auth Token
-   - Phone number
-3. A Microsoft Graph API application registration with:
+2. A Microsoft Graph API application registration with:
    - Application (client) ID
    - A certificate for authentication (to be uploaded to Key Vault after deployment)
-4. A HaloPSA webhook URL
+3. A HaloPSA webhook URL
 
 ## Deployment Option 1: Deploy directly to Azure using ARM Template
-
-Click the button below to deploy directly to Azure:
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcscaminaci%2FSMS-Identity-Verification-for-HaloPSA%2Frefs%2Fheads%2Fmain%2Fazuredeploy.json)
 
@@ -37,15 +31,6 @@ Copy `azuredeploy.parameters.json` to `azuredeploy.parameters.local.json` and fi
         "keyVaultName": {
             "value": "your-keyvault-name"
         },
-        "twilioPhoneNumber": {
-            "value": "your-twilio-phone-number"
-        },
-        "twilioSid": {
-            "value": "your-twilio-sid"
-        },
-        "twilioToken": {
-            "value": "your-twilio-auth-token"
-        },
         "haloWebhookUrl": {
             "value": "your-halo-webhook-url"
         },
@@ -53,13 +38,7 @@ Copy `azuredeploy.parameters.json` to `azuredeploy.parameters.local.json` and fi
             "value": "your-graph-app-id"
         },
         "certificateName": {
-            "value": "GraphApiCert"
-        },
-        "mspName": {
-            "value": "your-msp-name"
-        },
-        "location": {
-            "value": "East US"
+            "value": "your-certificate-name"
         }
     }
 }
@@ -123,7 +102,6 @@ The deployment will automatically configure the following settings in your Funct
 ## Security
 
 The deployment includes:
-
 - A system-assigned managed identity for the Function App
 - Key Vault access policies for the Function App to access secrets and certificates
 - HTTPS-only access

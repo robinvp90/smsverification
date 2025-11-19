@@ -5,11 +5,12 @@ using namespace System.Security.Cryptography.X509Certificates
 param(
     [Parameter(Mandatory = $true)]
     [object] $Request,
+
     [Parameter(Mandatory = $false)]
     [object] $TriggerMetadata
 )
-
 Import-Module Az.Accounts
+Import-Module Az.automation
 Import-Module Az.KeyVault
 Import-Module Microsoft.Graph.Authentication
 Import-Module Microsoft.Graph.Users
@@ -17,7 +18,6 @@ Import-Module Microsoft.Graph.Groups
 Import-Module Microsoft.Graph.Identity.DirectoryManagement
 Import-Module Microsoft.Graph.Identity.SignIns
 Import-Module Microsoft.Graph.Users.Actions
-
 # Ensure the preference variables are set appropriately
 $ErrorActionPreference = 'Stop'
 $VerbosePreference = 'Continue'
@@ -54,7 +54,6 @@ function Get-KeyVaultCertificate {
     
     try {
         Write-Information "Retrieving certificate '$CertificateName' from Key Vault '$VaultName'"
-        
         # Retrieve the certificate bundle from Key Vault
         $certBundle = Get-AzKeyVaultCertificate -VaultName $VaultName -Name $CertificateName
         if (-not $certBundle) {
@@ -73,12 +72,11 @@ function Get-KeyVaultCertificate {
         # Create an X509Certificate2 object from the byte array.
         # The Exportable flag ensures that the private key is accessible.
         $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($CertBytes, $null, [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
-        
         Write-Information "Returning the following certificate for authentication: $($Cert)"
         return $cert
     }
     catch {
-        throw "Failed to retrieve certificate '$($CertificateName)' from Key Vault '$($VaultName)': $($_.Exception.Message)"
+        throw "Failed to retrieve certificate from Key Vault: $($_.Exception.Message)"
     }
 }
 
@@ -92,8 +90,7 @@ try {
     try {
         if ($WebHookData -is [System.Collections.Hashtable] -or $WebHookData -is [PSCustomObject]) {
             $Data = $WebHookData
-        }
-        else {
+        } else {
             $Data = $WebHookData | ConvertFrom-Json -ErrorAction Stop
         }
     }
@@ -115,14 +112,9 @@ try {
         Write-ErrorResponse -Message "Missing 'TicketID' field in request content" -StatusCode ([HttpStatusCode]::BadRequest)
         return
     }
-    if (-not $Data.content.VerificationCode) {
-        Write-ErrorResponse -Message "Missing 'VerificationCode' field in request content" -StatusCode ([HttpStatusCode]::BadRequest)
-        return
-    }
 
     $HaloUser = $Data.content.HaloUser
     $TicketID = $Data.content.TicketID
-    $VerificationCode = $Data.content.VerificationCode
     $RequestID = $Data.id
     $Timestamp = $Data.timestamp
     $RefCharacter = $HaloUser.IndexOf("@")
@@ -130,10 +122,10 @@ try {
 
     Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
         StatusCode = [HttpStatusCode]::OK
-        Body       = @{
-            status    = "success"
-            message   = "Processing request for user: $HaloUser"
-            ticketId  = $TicketID
+        Body = @{
+            status = "success"
+            message = "Processing request for user: $HaloUser"
+            ticketId = $TicketID
             requestId = $RequestID
         } | ConvertTo-Json
     })
@@ -148,8 +140,12 @@ try {
     }
 
     # Retrieve KeyVault secrets and set variables
+    $random = Get-Random -Minimum 100000 -Maximum 999999
     $VaultName = $env:KEY_VAULT_NAME
+    $sid = Get-AzKeyVaultSecret -VaultName $VaultName -Name $env:TWILIO_SID_SECRET_NAME -AsPlainText
+    $token = Get-AzKeyVaultSecret -VaultName $VaultName -Name $env:TWILIO_TOKEN_SECRET_NAME -AsPlainText
     $WebhookUrl = $env:HALO_WEBHOOK_URL
+    $number = $env:TWILIO_PHONE_NUMBER
 
     # Connect to Microsoft Graph
     $AppId = $env:GRAPH_APP_ID
@@ -170,100 +166,104 @@ try {
     }
 
     # Get MFA methods
-    $SoftwareOathMethodId = $null
+    $MFAPhone = $null
     [array]$MFAData = Get-MgUserAuthenticationMethod -UserId $HaloUser
-
     $AuthenticationMethod = @()
     $AdditionalDetails = @()
     
-    foreach ($MFA in $MFAData) {
-        Switch ($MFA.AdditionalProperties["@odata.type"]) {
-            "#microsoft.graph.passwordAuthenticationMethod" {
+    foreach ($MFA in $MFAData)
+    {
+        Switch ($MFA.AdditionalProperties["@odata.type"])
+        {
+            "#microsoft.graph.passwordAuthenticationMethod"
+            {
                 $AuthMethod = 'PasswordAuthentication'
                 $AuthMethodDetails = $MFA.AdditionalProperties["displayName"]
             }
-            "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
+            "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod"
+            {
                 # Microsoft Authenticator App
                 $AuthMethod = 'AuthenticatorApp'
                 $AuthMethodDetails = $MFA.AdditionalProperties["displayName"]
                 $MicrosoftAuthenticatorDevice = $MFA.AdditionalProperties["displayName"]
             }
-            "#microsoft.graph.phoneAuthenticationMethod" {
+            "#microsoft.graph.phoneAuthenticationMethod"
+            {
                 # Phone authentication
                 $AuthMethod = 'PhoneAuthentication'
+                $AuthMethodDetails = $MFA.AdditionalProperties["phoneType", "phoneNumber"] -join ' '
+                $MFAPhone = $MFA.AdditionalProperties["phoneNumber"]
             }
-            "#microsoft.graph.fido2AuthenticationMethod" {
+            "#microsoft.graph.fido2AuthenticationMethod"
+            {
                 # FIDO2 key
                 $AuthMethod = 'Fido2'
                 $AuthMethodDetails = $MFA.AdditionalProperties["model"]
             }
-            "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
+            "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod"
+            {
                 # Windows Hello
                 $AuthMethod = 'WindowsHelloForBusiness'
                 $AuthMethodDetails = $MFA.AdditionalProperties["displayName"]
             }
-            "#microsoft.graph.emailAuthenticationMethod" {
+            "#microsoft.graph.emailAuthenticationMethod"
+            {
                 # Email Authentication
                 $AuthMethod = 'EmailAuthentication'
                 $AuthMethodDetails = $MFA.AdditionalProperties["emailAddress"]
             }
-            "microsoft.graph.temporaryAccessPassAuthenticationMethod" {
+            "microsoft.graph.temporaryAccessPassAuthenticationMethod"
+            {
                 # Temporary Access pass
                 $AuthMethod = 'TemporaryAccessPass'
                 $AuthMethodDetails = 'Access pass lifetime (minutes): ' + $MFA.AdditionalProperties["lifetimeInMinutes"]
             }
-            "#microsoft.graph.passwordlessMicrosoftAuthenticatorAuthenticationMethod" {
+            "#microsoft.graph.passwordlessMicrosoftAuthenticatorAuthenticationMethod"
+            {
                 # Passwordless
                 $AuthMethod = 'PasswordlessMSAuthenticator'
                 $AuthMethodDetails = $MFA.AdditionalProperties["displayName"]
             }
-            "#microsoft.graph.softwareOathAuthenticationMethod" {
+            "#microsoft.graph.softwareOathAuthenticationMethod"
+            {
                 $AuthMethod = 'SoftwareOath'
                 $Is3rdPartyAuthenticatorUsed = "True"
-                $AuthMethodDetails = "Microsoft Authenticator (or other TOTP app)"
-                $SoftwareOathMethodId = $MFA.Id
             }
+            
         }
         $AuthenticationMethod += $AuthMethod
-        if ($AuthMethodDetails -ne $null) {
+        if ($AuthMethodDetails -ne $null)
+        {
             $AdditionalDetails += "$AuthMethod : $AuthMethodDetails"
         }
     }
-    
     #To remove duplicate authentication methods
     $AuthenticationMethod = $AuthenticationMethod | Sort-Object | Get-Unique
     $AuthenticationMethods = $AuthenticationMethod -join ","
     $AdditionalDetail = $AdditionalDetails -join ", "
 
-    # Check if a Software OATH method (Authenticator App) is registered
-    if (-not $SoftwareOathMethodId) {
-        throw "User does not have Microsoft Authenticator (or a compatible TOTP app) registered as an MFA method."
+    # Check if MFAPhone is available
+    if (-not $MFAPhone) {
+        throw "User does not have a registered phone for MFA"
     }
-
-    # Validate the code provided by the user
-    $VerificationResult = $false
-    try {
-        $VerificationResult = Verify-MgUserAuthenticationSoftwareOathMethod -UserId $HaloUser -SoftwareOathAuthenticationMethodId $SoftwareOathMethodId -Code $VerificationCode
-    }
-    catch {
-        # The command throws an exception on failure, so we catch it and treat it as a failed validation
-        Write-Warning "Authenticator code validation failed: $($_.Exception.Message)"
-        $VerificationResult = $false
-    }
-
-    $VerificationStatus = if ($VerificationResult) { "Success" } else { "Failure" }
-    $VerificationColor = if ($VerificationResult) { "#27ae60" } else { "#e74c3c" }
 
     # Generate HTML response
     $Note = @"
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; border-radius: 10px; background: linear-gradient(145deg, #ffffff, #f0f0f0); box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; border-radius: 10px;
+            background: linear-gradient(145deg, #ffffff, #f0f0f0);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
 
     <div style="text-align: center; margin-bottom: 20px;">
-        <h1 style="color: #2c3e50; margin: 0; padding: 10px; font-size: 24px; border-bottom: 2px solid $VerificationColor;">
+        <h1 style="color: #2c3e50; margin: 0; padding: 10px; font-size: 24px; border-bottom: 2px solid #3498db;">
             Identity Verification Details
         </h1>
     </div>
     
+    <div style="background: #3498db; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 15px 0;">
+        <div style="font-size: 32px; font-weight: bold; letter-spacing: 3px;">$Random</div>
+        <div style="font-size: 14px; margin-top: 5px;">Verification Code</div>
+    </div>
+
     <!-- Request Information -->
     <div style="background: #fff; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2ecc71;">
         <div style="font-size: 14px; color: #7f8c8d; margin-bottom: 5px;">Request Information</div>
@@ -273,12 +273,18 @@ try {
         <div style="color: #2c3e50; margin-bottom: 3px;">
             <strong>Timestamp:</strong> $Timestamp
         </div>
+        <div style="color: #2c3e50;">
+            <strong>Target Number:</strong> $MFAPhone
+        </div>
     </div>
 
     <!-- User Details -->
     <div style="background: #fff; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #e74c3c;">
         <div style="font-size: 14px; color: #7f8c8d; margin-bottom: 5px;">User Details</div>
-        <div style="color: #2c3e50; margin-bottom: 3px; white-space: normal; word-break: break-word; overflow-wrap: break-word;">
+        <div style="color: #2c3e50; margin-bottom: 3px;
+                    white-space: normal;
+                    word-break: break-word;
+                    overflow-wrap: break-word;">
             <strong>User:</strong> $HaloUser
         </div>
         <div style="color: #2c3e50; margin-bottom: 3px;">
@@ -289,17 +295,23 @@ try {
     <!-- Authentication Methods -->
     <div style="background: #fff; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #f1c40f;">
         <div style="font-size: 14px; color: #7f8c8d; margin-bottom: 5px;">Authentication Methods</div>
-        <div style="color: #2c3e50; margin-bottom: 3px; white-space: normal; word-break: break-word; overflow-wrap: break-word;">
+        <div style="color: #2c3e50; margin-bottom: 3px;
+                    white-space: normal;
+                    word-break: break-word;
+                    overflow-wrap: break-word;">
             <strong>Methods:</strong> $AuthenticationMethods
         </div>
-        <div style="color: #2c3e50; white-space: normal; word-break: break-word; overflow-wrap: break-word;">
+        <div style="color: #2c3e50;
+                    white-space: normal;
+                    word-break: break-word;
+                    overflow-wrap: break-word;">
             <strong>Details:</strong> $AdditionalDetail
         </div>
     </div>
 
-    <!-- Verification Result -->
-    <div style="background: $VerificationColor; color: white; padding: 10px; border-radius: 5px; text-align: center; margin-top: 20px;">
-        <span style="font-size: 16px;">Authenticator Code Verification: $VerificationStatus</span>
+    <!-- Twilio Response -->
+    <div style="background: #27ae60; color: white; padding: 10px; border-radius: 5px; text-align: center; margin-top: 20px;">
+        <span style="font-size: 16px;">Microsoft Authenticator Response: Success</span>
     </div>
 </div>
 "@
@@ -310,27 +322,12 @@ try {
     }
 
     $HaloResponsePayload = @{
-        "TicketID"              = $TicketID
-        "VerificationResponse"  = $Note
+        "TicketID" = $TicketID
+        "VerificationResponse" = $Note
     }
 
     $JsonPayload = $HaloResponsePayload | ConvertTo-Json
-    Write-Information "Attempting to send response to Halo webhook at: $WebhookUrl"
-    Write-Information "Payload being sent: $JsonPayload"
-
-    try {
-        $HaloWebhookResponse = Invoke-RestMethod -Uri $WebhookUrl -Method Post -Body $JsonPayload -Headers $headers -ErrorAction Stop
-        Write-Information "Successfully received response from Halo webhook."
-        Write-Information "Halo Webhook Status Code: $($HaloWebhookResponse.StatusCode)"
-        Write-Information "Halo Webhook Response Content: $($HaloWebhookResponse.Content | Out-String)"
-        $Response = $HaloWebhookResponse # Assign the full response object if needed later
-    }
-    catch {
-        $errorMessage = "Failed to call Halo webhook: $($_.Exception.Message). Check URL and payload."
-        Write-Error $errorMessage
-        # Re-throw the exception so the main catch block can handle the HTTP response
-        throw $errorMessage
-    }
+    $Response = Invoke-RestMethod -Uri $WebhookUrl -Method Post -Body $JsonPayload -Headers $headers -ErrorAction Stop
     
 }
 catch {
