@@ -1,0 +1,36 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "functionAppName": {
+            "value": ""
+        },
+        "keyVaultName": {
+            "value": ""
+        },
+        "twilioPhoneNumber": {
+            "value": ""
+        },
+        "twilioSid": {
+            "value": ""
+        },
+        "twilioToken": {
+            "value": ""
+        },
+        "haloWebhookUrl": {
+            "value": ""
+        },
+        "graphAppId": {
+            "value": ""
+        },
+        "certificateName": {
+            "value": "GraphApiCert"
+        },
+        "mspName": {
+            "value": ""
+        },
+        "location": {
+            "value": ""
+        }
+    }
+}

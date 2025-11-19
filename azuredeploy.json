@@ -1,0 +1,253 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "functionAppName": {
+            "type": "string",
+            "defaultValue": "MSPAutomator-SMSIdentityVerification",
+            "metadata": {
+                "description": "The name of the Azure Function app that you wish to create."
+            }
+        },
+        "keyVaultName": {
+            "type": "string",
+            "defaultValue": "MyFirstKeyVault",
+            "metadata": {
+                "description": "The name of the Key Vault to create."
+            }
+        },
+        "twilioPhoneNumber": {
+            "type": "string",
+            "metadata": {
+                "description": "Your Twilio phone number"
+            }
+        },
+        "twilioSid": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Your Twilio Account SID"
+            }
+        },
+        "twilioToken": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Your Twilio Auth Token"
+            }
+        },
+        "haloWebhookUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "The Halo PSA webhook URL"
+            }
+        },
+        "graphAppId": {
+            "type": "string",
+            "metadata": {
+                "description": "The Microsoft Graph Application (client) ID"
+            }
+        },
+        "certificateName": {
+            "type": "string",
+            "defaultValue": "GraphApiCert",
+            "metadata": {
+                "description": "Name of the certificate used for Graph API authentication"
+            }
+        },
+        "mspName": {
+            "type": "string",
+            "metadata": {
+                "description": "Your MSP company name"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "East US",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        }
+    },
+    "variables": {
+        "functionAppServicePlanName": "[concat(parameters('functionAppName'), '-plan')]",
+        "storageAccountName": "[concat('sa', uniqueString(resourceGroup().id))]",
+        "functionRuntime": "powershell",
+        "functionVersion": "~4"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-08-01",
+            "name": "[variables('storageAccountName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Standard_LRS"
+            },
+            "kind": "StorageV2"
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2021-03-01",
+            "name": "[variables('functionAppServicePlanName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "properties": {
+                "reserved": false
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2021-10-01",
+            "name": "[parameters('keyVaultName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "enabledForDeployment": true,
+                "enabledForDiskEncryption": true,
+                "enabledForTemplateDeployment": true,
+                "tenantId": "[subscription().tenantId]",
+                "accessPolicies": [],
+                "sku": {
+                    "name": "standard",
+                    "family": "A"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2021-03-01",
+            "name": "[parameters('functionAppName')]",
+            "location": "[parameters('location')]",
+            "kind": "functionapp",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('functionAppServicePlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('functionAppServicePlanName'))]",
+                "siteConfig": {
+                    "powerShellVersion": "7.4",
+                    "netFrameworkVersion": "v8.0",
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-08-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-08-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(parameters('functionAppName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "[variables('functionVersion')]"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "[variables('functionRuntime')]"
+                        },
+                        {
+                            "name": "KEY_VAULT_NAME",
+                            "value": "[parameters('keyVaultName')]"
+                        },
+                        {
+                            "name": "TWILIO_PHONE_NUMBER",
+                            "value": "[parameters('twilioPhoneNumber')]"
+                        },
+                        {
+                            "name": "TWILIO_SID_SECRET_NAME",
+                            "value": "TwilioSid"
+                        },
+                        {
+                            "name": "TWILIO_TOKEN_SECRET_NAME",
+                            "value": "TwilioToken"
+                        },
+                        {
+                            "name": "HALO_WEBHOOK_URL",
+                            "value": "[parameters('haloWebhookUrl')]"
+                        },
+                        {
+                            "name": "GRAPH_APP_ID",
+                            "value": "[parameters('graphAppId')]"
+                        },
+                        {
+                            "name": "CERTIFICATE_NAME",
+                            "value": "[parameters('certificateName')]"
+                        },
+                        {
+                            "name": "MSP_NAME",
+                            "value": "[parameters('mspName')]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2021-10-01",
+            "name": "[concat(parameters('keyVaultName'), '/TwilioSid')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('twilioSid')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2021-10-01",
+            "name": "[concat(parameters('keyVaultName'), '/TwilioToken')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('twilioToken')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "apiVersion": "2021-10-01",
+            "name": "[concat(parameters('keyVaultName'), '/add')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+            ],
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'Full').identity.principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "get",
+                                "list"
+                            ],
+                            "certificates": [
+                                "get",
+                                "list"
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {
+        "functionAppUrl": {
+            "type": "string",
+            "value": "[concat('https://', parameters('functionAppName'), '.azurewebsites.net')]"
+        },
+        "keyVaultName": {
+            "type": "string",
+            "value": "[parameters('keyVaultName')]"
+        }
+    }
+}
