@@ -89,22 +89,34 @@
                 "enabledForDiskEncryption": true,
                 "enabledForTemplateDeployment": true,
                 "tenantId": "[subscription().tenantId]",
-                                "accessPolicies": [
-                                    {
-                                        "tenantId": "[subscription().tenantId]",
-                                        "objectId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'Full').identity.principalId]",
-                                        "permissions": {
-                                            "certificates": ["get", "list"],
-                                            "secrets": ["get", "list"]
-                                        }
-                                    }
-                                ],
+                    "accessPolicies": [],
                 "sku": {
                     "name": "standard",
                     "family": "A"
                 }
             }
         },
+            {
+                "type": "Microsoft.KeyVault/vaults/accessPolicies",
+                "apiVersion": "2021-10-01",
+                "name": "[concat(parameters('keyVaultName'), '/add')]",
+                "dependsOn": [
+                    "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+                    "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+                ],
+                "properties": {
+                    "accessPolicies": [
+                        {
+                            "tenantId": "[subscription().tenantId]",
+                            "objectId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2021-03-01', 'Full').identity.principalId]",
+                            "permissions": {
+                                "certificates": ["get", "list"],
+                                "secrets": ["get", "list"]
+                            }
+                        }
+                    ]
+                }
+            },
         {
             "type": "Microsoft.Web/sites",
             "apiVersion": "2021-03-01",
