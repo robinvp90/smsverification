@@ -1,14 +1,15 @@
 {
   "bindings": [
     {
-      "authLevel": "function",
+      "authLevel": "anonymous",
       "type": "httpTrigger",
       "direction": "in",
       "name": "Request",
       "methods": [
+        "get",
         "post"
       ],
-      "route": null
+      "route": ""
     },
     {
       "type": "http",
@@ -18,3 +19,4 @@
   ],
   "scriptFile": "run.ps1"
 }
+
