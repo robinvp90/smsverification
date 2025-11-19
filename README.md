@@ -97,7 +97,7 @@ The deployment will automatically configure the following settings in your Funct
 
 - PowerShell version: 7.4
 - .NET Framework version: 8.0
-- All necessary environment variables for Twilio, Graph API, and HaloPSA integration
+- All necessary environment variables for Graph API and HaloPSA integration
 
 ## Security
 

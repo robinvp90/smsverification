@@ -142,13 +142,6 @@ try {
     # Retrieve KeyVault secrets and set variables
     $random = Get-Random -Minimum 100000 -Maximum 999999
     $VaultName = $env:KEY_VAULT_NAME
-    $sid = Get-AzKeyVaultSecret -VaultName $VaultName -Name $env:TWILIO_SID_SECRET_NAME -AsPlainText
-    $token = Get-AzKeyVaultSecret -VaultName $VaultName -Name $env:TWILIO_TOKEN_SECRET_NAME -AsPlainText
-    $WebhookUrl = $env:HALO_WEBHOOK_URL
-    $number = $env:TWILIO_PHONE_NUMBER
-
-    # Connect to Microsoft Graph
-    $AppId = $env:GRAPH_APP_ID
     $CertificateName = $env:CERTIFICATE_NAME
 
     if ([string]::IsNullOrWhiteSpace($TenantID)) {

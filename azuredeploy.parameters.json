@@ -8,15 +8,6 @@
         "keyVaultName": {
             "value": ""
         },
-        "twilioPhoneNumber": {
-            "value": ""
-        },
-        "twilioSid": {
-            "value": ""
-        },
-        "twilioToken": {
-            "value": ""
-        },
         "haloWebhookUrl": {
             "value": ""
         },
@@ -28,9 +19,9 @@
         },
         "mspName": {
             "value": ""
-        }
+        },
         "location": {
             "value": ""
         }
     }
-} 
+}
