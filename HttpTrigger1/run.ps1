@@ -116,12 +116,17 @@ try {
         Write-ErrorResponse -Message "Missing 'TicketID' field in request content" -StatusCode ([HttpStatusCode]::BadRequest)
         return
     }
+    if (-not $Data.content.VerificationCode) {
+        Write-ErrorResponse -Message "Missing 'VerificationCode' field in request content" -StatusCode ([HttpStatusCode]::BadRequest)
+        return
+    }
 
     $HaloUser = $Data.content.HaloUser
     $TicketID = $Data.content.TicketID
+    $VerificationCode = $Data.content.VerificationCode
     $RequestID = $Data.id
     $Timestamp = $Data.timestamp
-    $RefCharacter = $HaloUser.IndexOf("@")
+    $RefCharacter = $HaloUser.IndexOf('@')
     $TenantID = $HaloUser.Substring($RefCharacter + 1)
 
     Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
@@ -144,12 +149,8 @@ try {
     }
 
     # Retrieve KeyVault secrets and set variables
-    $random = Get-Random -Minimum 100000 -Maximum 999999
     $VaultName = $env:KEY_VAULT_NAME
-    $sid = Get-AzKeyVaultSecret -VaultName $VaultName -Name $env:TWILIO_SID_SECRET_NAME -AsPlainText
-    $token = Get-AzKeyVaultSecret -VaultName $VaultName -Name $env:TWILIO_TOKEN_SECRET_NAME -AsPlainText
     $WebhookUrl = $env:HALO_WEBHOOK_URL
-    $number = $env:TWILIO_PHONE_NUMBER
 
     # Connect to Microsoft Graph
     $AppId = $env:GRAPH_APP_ID
@@ -170,7 +171,7 @@ try {
     }
 
     # Get MFA methods
-    $MFAPhone = $null
+    $SoftwareOathMethodId = $null
     [array]$MFAData = Get-MgUserAuthenticationMethod -UserId $HaloUser
 
     $AuthenticationMethod = @()
@@ -191,8 +192,6 @@ try {
             "#microsoft.graph.phoneAuthenticationMethod" {
                 # Phone authentication
                 $AuthMethod = 'PhoneAuthentication'
-                $AuthMethodDetails = $MFA.AdditionalProperties["phoneType", "phoneNumber"] -join ' '
-                $MFAPhone = $MFA.AdditionalProperties["phoneNumber"]
             }
             "#microsoft.graph.fido2AuthenticationMethod" {
                 # FIDO2 key
@@ -222,6 +221,8 @@ try {
             "#microsoft.graph.softwareOathAuthenticationMethod" {
                 $AuthMethod = 'SoftwareOath'
                 $Is3rdPartyAuthenticatorUsed = "True"
+                $AuthMethodDetails = "Microsoft Authenticator (or other TOTP app)"
+                $SoftwareOathMethodId = $MFA.Id
             }
         }
         $AuthenticationMethod += $AuthMethod
@@ -235,40 +236,35 @@ try {
     $AuthenticationMethods = $AuthenticationMethod -join ","
     $AdditionalDetail = $AdditionalDetails -join ", "
 
-    # Check if MFAPhone is available
-    if (-not $MFAPhone) {
-        throw "User does not have a registered phone for MFA"
+    # Check if a Software OATH method (Authenticator App) is registered
+    if (-not $SoftwareOathMethodId) {
+        throw "User does not have Microsoft Authenticator (or a compatible TOTP app) registered as an MFA method."
     }
 
-    # Call Twilio API
-    $url = "https://api.twilio.com/2010-04-01/Accounts/$sid/Messages.json"
-    $params = @{
-        To   = $MFAPhone
-        From = $number
-        Body = "$($env:MSP_NAME) Support - Please give this code to your technician to verify your identity: $Random"
+    # Validate the code provided by the user
+    $VerificationResult = $false
+    try {
+        $VerificationResult = Verify-MgUserAuthenticationSoftwareOathMethod -UserId $HaloUser -SoftwareOathAuthenticationMethodId $SoftwareOathMethodId -Code $VerificationCode
+    }
+    catch {
+        # The command throws an exception on failure, so we catch it and treat it as a failed validation
+        Write-Warning "Authenticator code validation failed: $($_.Exception.Message)"
+        $VerificationResult = $false
     }
 
-    $p = $token | ConvertTo-SecureString -AsPlainText -Force
-    $credential = New-Object System.Management.Automation.PSCredential($sid, $p)
-
-    $TwilioResponse = Invoke-WebRequest -Uri $url -Method Post -Credential $credential -Body $params -UseBasicParsing -ErrorAction Stop |
-        ConvertFrom-Json | Select-Object sid, body
+    $VerificationStatus = if ($VerificationResult) { "Success" } else { "Failure" }
+    $VerificationColor = if ($VerificationResult) { "#27ae60" } else { "#e74c3c" }
 
     # Generate HTML response
     $Note = @"
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; border-radius: 10px; background: linear-gradient(145deg, #ffffff, #f0f0f0); box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
 
     <div style="text-align: center; margin-bottom: 20px;">
-        <h1 style="color: #2c3e50; margin: 0; padding: 10px; font-size: 24px; border-bottom: 2px solid #3498db;">
+        <h1 style="color: #2c3e50; margin: 0; padding: 10px; font-size: 24px; border-bottom: 2px solid $VerificationColor;">
             Identity Verification Details
         </h1>
     </div>
     
-    <div style="background: #3498db; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 15px 0;">
-        <div style="font-size: 32px; font-weight: bold; letter-spacing: 3px;">$Random</div>
-        <div style="font-size: 14px; margin-top: 5px;">Verification Code</div>
-    </div>
-
     <!-- Request Information -->
     <div style="background: #fff; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2ecc71;">
         <div style="font-size: 14px; color: #7f8c8d; margin-bottom: 5px;">Request Information</div>
@@ -277,9 +273,6 @@ try {
         </div>
         <div style="color: #2c3e50; margin-bottom: 3px;">
             <strong>Timestamp:</strong> $Timestamp
-        </div>
-        <div style="color: #2c3e50;">
-            <strong>Target Number:</strong> $MFAPhone
         </div>
     </div>
 
@@ -305,9 +298,9 @@ try {
         </div>
     </div>
 
-    <!-- Twilio Response -->
-    <div style="background: #27ae60; color: white; padding: 10px; border-radius: 5px; text-align: center; margin-top: 20px;">
-        <span style="font-size: 16px;">Twilio Response: Success</span>
+    <!-- Verification Result -->
+    <div style="background: $VerificationColor; color: white; padding: 10px; border-radius: 5px; text-align: center; margin-top: 20px;">
+        <span style="font-size: 16px;">Authenticator Code Verification: $VerificationStatus</span>
     </div>
 </div>
 "@
