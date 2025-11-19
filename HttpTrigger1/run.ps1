@@ -324,6 +324,23 @@ try {
 
     $JsonPayload = $HaloResponsePayload | ConvertTo-Json
     $Response = Invoke-RestMethod -Uri $WebhookUrl -Method Post -Body $JsonPayload -Headers $headers -ErrorAction Stop
+
+    Write-Information "Attempting to send response to Halo webhook at: $WebhookUrl"
+    Write-Information "Payload being sent: $JsonPayload"
+
+    try {
+        $HaloWebhookResponse = Invoke-RestMethod -Uri $WebhookUrl -Method Post -Body $JsonPayload -Headers $headers -ErrorAction Stop
+        Write-Information "Successfully received response from Halo webhook."
+        Write-Information "Halo Webhook Status Code: $($HaloWebhookResponse.StatusCode)"
+        Write-Information "Halo Webhook Response Content: $($HaloWebhookResponse.Content | Out-String)"
+        $Response = $HaloWebhookResponse # Assign the full response object if needed later
+    }
+    catch {
+        $errorMessage = "Failed to call Halo webhook: $($_.Exception.Message). Check URL and payload."
+        Write-Error $errorMessage
+        # Re-throw the exception so the main catch block can handle the HTTP response
+        throw $errorMessage
+    }
     
 }
 catch {
