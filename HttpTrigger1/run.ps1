@@ -10,7 +10,6 @@ param(
 )
 
 Import-Module Az.Accounts
-Import-Module Az.Automation
 Import-Module Az.KeyVault
 Import-Module Microsoft.Graph.Authentication
 Import-Module Microsoft.Graph.Users
@@ -126,7 +125,7 @@ try {
     $VerificationCode = $Data.content.VerificationCode
     $RequestID = $Data.id
     $Timestamp = $Data.timestamp
-    $RefCharacter = $HaloUser.IndexOf('@')
+    $RefCharacter = $HaloUser.IndexOf("@")
     $TenantID = $HaloUser.Substring($RefCharacter + 1)
 
     Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
@@ -316,8 +315,6 @@ try {
     }
 
     $JsonPayload = $HaloResponsePayload | ConvertTo-Json
-    $Response = Invoke-RestMethod -Uri $WebhookUrl -Method Post -Body $JsonPayload -Headers $headers -ErrorAction Stop
-
     Write-Information "Attempting to send response to Halo webhook at: $WebhookUrl"
     Write-Information "Payload being sent: $JsonPayload"
 

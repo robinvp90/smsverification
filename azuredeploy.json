@@ -16,24 +16,6 @@
                 "description": "The name of the Key Vault to create."
             }
         },
-        "twilioPhoneNumber": {
-            "type": "string",
-            "metadata": {
-                "description": "Your Twilio phone number"
-            }
-        },
-        "twilioSid": {
-            "type": "securestring",
-            "metadata": {
-                "description": "Your Twilio Account SID"
-            }
-        },
-        "twilioToken": {
-            "type": "securestring",
-            "metadata": {
-                "description": "Your Twilio Auth Token"
-            }
-        },
         "haloWebhookUrl": {
             "type": "string",
             "metadata": {
@@ -155,22 +137,6 @@
                             "value": "[variables('functionRuntime')]"
                         },
                         {
-                            "name": "KEY_VAULT_NAME",
-                            "value": "[parameters('keyVaultName')]"
-                        },
-                        {
-                            "name": "TWILIO_PHONE_NUMBER",
-                            "value": "[parameters('twilioPhoneNumber')]"
-                        },
-                        {
-                            "name": "TWILIO_SID_SECRET_NAME",
-                            "value": "TwilioSid"
-                        },
-                        {
-                            "name": "TWILIO_TOKEN_SECRET_NAME",
-                            "value": "TwilioToken"
-                        },
-                        {
                             "name": "HALO_WEBHOOK_URL",
                             "value": "[parameters('haloWebhookUrl')]"
                         },
@@ -188,28 +154,6 @@
                         }
                     ]
                 }
-            }
-        },
-        {
-            "type": "Microsoft.KeyVault/vaults/secrets",
-            "apiVersion": "2021-10-01",
-            "name": "[concat(parameters('keyVaultName'), '/TwilioSid')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
-            ],
-            "properties": {
-                "value": "[parameters('twilioSid')]"
-            }
-        },
-        {
-            "type": "Microsoft.KeyVault/vaults/secrets",
-            "apiVersion": "2021-10-01",
-            "name": "[concat(parameters('keyVaultName'), '/TwilioToken')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
-            ],
-            "properties": {
-                "value": "[parameters('twilioToken')]"
             }
         },
         {
