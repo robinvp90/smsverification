@@ -143,6 +143,16 @@ try {
     $random = Get-Random -Minimum 100000 -Maximum 999999
     $VaultName = $env:KEY_VAULT_NAME
     $CertificateName = $env:CERTIFICATE_NAME
+    # Required environment variables
+    $WebhookUrl = $env:HALO_WEBHOOK_URL
+    $AppId = $env:GRAPH_APP_ID
+
+    if ([string]::IsNullOrWhiteSpace($WebhookUrl)) {
+        Write-Information "HALO_WEBHOOK_URL is not set. Webhook deliveries will be skipped."
+    }
+    if ([string]::IsNullOrWhiteSpace($AppId)) {
+        throw "GRAPH_APP_ID environment variable is not set. Cannot authenticate to Microsoft Graph."
+    }
 
     if ([string]::IsNullOrWhiteSpace($TenantID)) {
         throw "TenantID cannot be empty"
@@ -320,7 +330,18 @@ try {
     }
 
     $JsonPayload = $HaloResponsePayload | ConvertTo-Json
-    $Response = Invoke-RestMethod -Uri $WebhookUrl -Method Post -Body $JsonPayload -Headers $headers -ErrorAction Stop
+    if (-not [string]::IsNullOrWhiteSpace($WebhookUrl)) {
+        try {
+            Invoke-RestMethod -Uri $WebhookUrl -Method Post -Body $JsonPayload -Headers $headers -ErrorAction Stop
+            Write-Information "Successfully sent payload to Halo webhook"
+        }
+        catch {
+            Write-Error "Failed to send payload to Halo webhook: $($_.Exception.Message)"
+        }
+    }
+    else {
+        Write-Information "HALO_WEBHOOK_URL not configured; skipping webhook POST."
+    }
     
 }
 catch {
