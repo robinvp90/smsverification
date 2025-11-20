@@ -4,7 +4,7 @@
     "parameters": {
         "functionAppName": {
             "type": "string",
-            "defaultValue": "MSPAutomator-AuthenticatorVerification",
+            "defaultValue": "ipautomate-AuthenticatorVerification",
             "metadata": {
                 "description": "The name of the Azure Function app that you wish to create."
             }
@@ -35,10 +35,10 @@
                 "description": "Name of the certificate used for Graph API authentication"
             }
         },
-        "mspName": {
+        "ipAutomateName": {
             "type": "string",
             "metadata": {
-                "description": "Your MSP company name"
+                "description": "Your IPAutomate company/name"
             }
         },
 		"location": {
@@ -174,8 +174,8 @@
                             "value": "[parameters('certificateName')]"
                         },
                         {
-                            "name": "MSP_NAME",
-                            "value": "[parameters('mspName')]"
+                            "name": "IPAUTOMATE_NAME",
+                            "value": "[parameters('ipAutomateName')]"
                         }
                     ]
                 }
