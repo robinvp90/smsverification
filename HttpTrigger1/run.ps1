@@ -84,6 +84,9 @@ try {
     # Parse the request body
     $WebHookData = $Request.Body
     
+    Write-Information "HttpTrigger1 invoked"
+    Write-Information "Raw request body: $($WebHookData | Out-String)"
+
     Write-Information "Received request body: $($WebHookData | Out-String)"
     
     # Parse the JSON data
