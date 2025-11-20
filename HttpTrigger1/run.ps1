@@ -176,6 +176,7 @@ try {
     [array]$MFAData = Get-MgUserAuthenticationMethod -UserId $HaloUser
     $AuthenticationMethod = @()
     $AdditionalDetails = @()
+    $MicrosoftAuthenticatorDevice = $null
     
     foreach ($MFA in $MFAData)
     {
@@ -249,10 +250,21 @@ try {
     $AdditionalDetail = $AdditionalDetails -join ", "
 
     # Check if MFAPhone is available
-    if (-not $MFAPhone) {
-        throw "User does not have a registered phone for MFA"
+    # Determine target MFA method: prefer Microsoft Authenticator, fall back to phone
+    if ($MicrosoftAuthenticatorDevice) {
+        $TargetMethod = 'AuthenticatorApp'
+        $TargetDisplay = $MicrosoftAuthenticatorDevice
+    }
+    elseif ($MFAPhone) {
+        $TargetMethod = 'Phone'
+        $TargetDisplay = $MFAPhone
+    }
+    else {
+        throw "User does not have a registered Microsoft Authenticator or phone for MFA"
     }
 
+    Write-Information "Selected MFA method: $TargetMethod"
+    Write-Information "Selected MFA target: $TargetDisplay"
     # Generate HTML response
     $Note = @"
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 20px; border-radius: 10px;
@@ -281,7 +293,7 @@ try {
         </div>
         <div style="color: #2c3e50;">
             <strong>Target Number:</strong> $MFAPhone
-        </div>
+                <strong>Target:</strong> $TargetDisplay
     </div>
 
     <!-- User Details -->
